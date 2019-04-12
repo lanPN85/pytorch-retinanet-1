@@ -9,6 +9,10 @@
 #include <math.h>
 #include <stdio.h>
 
+#include <torch/extension.h>
+#include <torch/types.h>
+#include <iostream>
+
 #include "cuda/nms_kernel.h"
 
 
@@ -65,3 +69,8 @@ int gpu_nms(THLongTensor * keep, THLongTensor* num_out, THCudaTensor * boxes, fl
 
   return 1;
 }
+
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+    m.def("gpu_nms", &gpu_mns, "NMS");
+}
+

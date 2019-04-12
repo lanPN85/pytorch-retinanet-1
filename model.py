@@ -6,12 +6,68 @@ import torch.utils.model_zoo as model_zoo
 from utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
 from anchors import Anchors
 import losses
-from lib.nms.pth_nms import pth_nms
+# from lib.nms.pth_nms import pth_nms
 
-def nms(dets, thresh):
-    "Dispatch to either CPU or GPU NMS implementations.\
-    Accept dets as tensor"""
-    return pth_nms(dets, thresh)
+def nms(dets, thresh=0.5, top_k=2000):
+    "Dispatch to either CPU or GPU NMS implementations. Accept dets as tensor"""
+    # return pth_nms(dets, thresh)
+    overlap = thresh
+    boxes = dets[:, :4]
+    scores = dets[:, 4].squeeze()
+
+    keep = scores.new(scores.size(0)).zero_().long()
+    if boxes.numel() == 0:
+        return keep
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
+    area = torch.mul(x2 - x1, y2 - y1)
+    v, idx = scores.sort(0)  # sort in ascending order
+    # I = I[v >= 0.01]
+    idx = idx[-top_k:]  # indices of the top-k largest vals
+    xx1 = boxes.new()
+    yy1 = boxes.new()
+    xx2 = boxes.new()
+    yy2 = boxes.new()
+    w = boxes.new()
+    h = boxes.new()
+
+    # keep = torch.Tensor()
+    count = 0
+    while idx.numel() > 0:
+        i = idx[-1]  # index of current largest val
+        # keep.append(i)
+        keep[count] = i
+        count += 1
+        if idx.size(0) == 1:
+            break
+        idx = idx[:-1]  # remove kept element from view
+        # load bboxes of next highest vals
+        torch.index_select(x1, 0, idx, out=xx1)
+        torch.index_select(y1, 0, idx, out=yy1)
+        torch.index_select(x2, 0, idx, out=xx2)
+        torch.index_select(y2, 0, idx, out=yy2)
+        # store element-wise max with next highest score
+        xx1 = torch.clamp(xx1, min=x1[i])
+        yy1 = torch.clamp(yy1, min=y1[i])
+        xx2 = torch.clamp(xx2, max=x2[i])
+        yy2 = torch.clamp(yy2, max=y2[i])
+        w.resize_as_(xx2)
+        h.resize_as_(yy2)
+        w = xx2 - xx1
+        h = yy2 - yy1
+        # check sizes of xx1 and xx2.. after each iteration
+        w = torch.clamp(w, min=0.0)
+        h = torch.clamp(h, min=0.0)
+        inter = w*h
+        # IoU = i / (area(a) + area(b) - i)
+        rem_areas = torch.index_select(area, 0, idx)  # load remaining areas)
+        union = (rem_areas - inter) + area[i]
+        IoU = inter/union  # store result in iou
+        # keep only elements with an IoU <= overlap
+        idx = idx[IoU.le(overlap)]
+    return keep[:count]
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -232,11 +288,7 @@ class ResNet(nn.Module):
                 layer.eval()
 
     def forward(self, inputs):
-
-        if self.training:
-            img_batch, annotations = inputs
-        else:
-            img_batch = inputs
+        img_batch = inputs
             
         x = self.conv1(img_batch)
         x = self.bn1(x)
@@ -255,31 +307,34 @@ class ResNet(nn.Module):
         classification = torch.cat([self.classificationModel(feature) for feature in features], dim=1)
 
         anchors = self.anchors(img_batch)
+        if img_batch.is_cuda:
+            anchors = anchors.cuda()
 
-        if self.training:
-            return self.focalLoss(classification, regression, anchors, annotations)
-        else:
-            transformed_anchors = self.regressBoxes(anchors, regression)
-            transformed_anchors = self.clipBoxes(transformed_anchors, img_batch)
+        return classification, regression, anchors
 
-            scores = torch.max(classification, dim=2, keepdim=True)[0]
+    def infer(self, output):
+        classification, regression, anchors = output
 
-            scores_over_thresh = (scores>0.05)[0, :, 0]
+        transformed_anchors = self.regressBoxes(anchors, regression)
+        transformed_anchors = self.clipBoxes(transformed_anchors, img_batch)
 
-            if scores_over_thresh.sum() == 0:
-                # no boxes to NMS, just return
-                return [torch.zeros(0), torch.zeros(0), torch.zeros(0, 4)]
+        scores = torch.max(classification, dim=2, keepdim=True)[0]
 
-            classification = classification[:, scores_over_thresh, :]
-            transformed_anchors = transformed_anchors[:, scores_over_thresh, :]
-            scores = scores[:, scores_over_thresh, :]
+        scores_over_thresh = (scores>0.05)[0, :, 0]
 
-            anchors_nms_idx = nms(torch.cat([transformed_anchors, scores], dim=2)[0, :, :], 0.5)
+        if scores_over_thresh.sum() == 0:
+            # no boxes to NMS, just return
+            return [torch.zeros(0), torch.zeros(0), torch.zeros(0, 4)]
 
-            nms_scores, nms_class = classification[0, anchors_nms_idx, :].max(dim=1)
+        classification = classification[:, scores_over_thresh, :]
+        transformed_anchors = transformed_anchors[:, scores_over_thresh, :]
+        scores = scores[:, scores_over_thresh, :]
 
-            return [nms_scores, nms_class, transformed_anchors[0, anchors_nms_idx, :]]
+        anchors_nms_idx = nms(torch.cat([transformed_anchors, scores], dim=2)[0, :, :], 0.5)
 
+        nms_scores, nms_class = classification[0, anchors_nms_idx, :].max(dim=1)
+
+        return [nms_scores, nms_class, transformed_anchors[0, anchors_nms_idx, :]]
 
 
 def resnet18(num_classes, pretrained=False, **kwargs):

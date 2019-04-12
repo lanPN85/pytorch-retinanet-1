@@ -1,6 +1,10 @@
 #include <TH/TH.h>
 #include <math.h>
 
+#include <torch/extension.h>
+#include <torch/types.h>
+#include <iostream>
+
 int cpu_nms(THLongTensor * keep_out, THLongTensor * num_out, THFloatTensor * boxes, THLongTensor * order, THFloatTensor * areas, float nms_overlap_thresh) {
     // boxes has to be sorted
     THArgCheck(THLongTensor_isContiguous(keep_out), 0, "keep_out must be contiguous");

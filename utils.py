@@ -78,29 +78,32 @@ class Bottleneck(nn.Module):
         return out
 
 class BBoxTransform(nn.Module):
-
     def __init__(self, mean=None, std=None):
         super(BBoxTransform, self).__init__()
         if mean is None:
-            self.mean = torch.from_numpy(np.array([0, 0, 0, 0]).astype(np.float32)).cuda()
+            self.mean = torch.from_numpy(np.array([0, 0, 0, 0]).astype(np.float32))
         else:
             self.mean = mean
         if std is None:
-            self.std = torch.from_numpy(np.array([0.1, 0.1, 0.2, 0.2]).astype(np.float32)).cuda()
+            self.std = torch.from_numpy(np.array([0.1, 0.1, 0.2, 0.2]).astype(np.float32))
         else:
             self.std = std
 
     def forward(self, boxes, deltas):
+        std, mean = self.std, self.mean
+        if deltas.is_cuda:
+            std = std.cuda()
+            mean = mean.cuda()
 
         widths  = boxes[:, :, 2] - boxes[:, :, 0]
         heights = boxes[:, :, 3] - boxes[:, :, 1]
         ctr_x   = boxes[:, :, 0] + 0.5 * widths
         ctr_y   = boxes[:, :, 1] + 0.5 * heights
 
-        dx = deltas[:, :, 0] * self.std[0] + self.mean[0]
-        dy = deltas[:, :, 1] * self.std[1] + self.mean[1]
-        dw = deltas[:, :, 2] * self.std[2] + self.mean[2]
-        dh = deltas[:, :, 3] * self.std[3] + self.mean[3]
+        dx = deltas[:, :, 0] * std[0] + mean[0]
+        dy = deltas[:, :, 1] * std[1] + mean[1]
+        dw = deltas[:, :, 2] * std[2] + mean[2]
+        dh = deltas[:, :, 3] * std[3] + mean[3]
 
         pred_ctr_x = ctr_x + dx * widths
         pred_ctr_y = ctr_y + dy * heights

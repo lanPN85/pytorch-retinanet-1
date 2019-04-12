@@ -301,7 +301,6 @@ class CSVDataset(Dataset):
 
 
 def collater(data):
-
     imgs = [s['img'] for s in data]
     annots = [s['annot'] for s in data]
     scales = [s['scale'] for s in data]
@@ -369,6 +368,7 @@ class Resizer(object):
         new_image[:rows, :cols, :] = image.astype(np.float32)
 
         annots[:, :4] *= scale
+        annots = annots.astype(np.int32)
 
         return {'img': torch.from_numpy(new_image), 'annot': torch.from_numpy(annots), 'scale': scale}
 
