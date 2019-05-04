@@ -1,8 +1,8 @@
 import numpy as np
 
 import csv_eval
-import anchors
 
+from anchors import Anchors
 from model import ResNet, BasicBlock, Bottleneck
 from losses import FocalLoss
 
@@ -14,9 +14,9 @@ IOU_THRES=0.5
 
 class UserModel(ResNet):
     def __init__(self):
-        super().__init__(3, Bottleneck, [3, 4, 6, 3])
-        # Custom anchor
-        self.anchors = anchors.Anchors(ratios=np.array([0.125, 0.25, 0.5, 1, 2]))
+        super().__init__(3, Bottleneck, [3, 4, 6, 3],
+            anchors=Anchors(ratios=np.array(
+                [0.125, 0.25, 0.5, 1, 2])))
 
     def loss(self, output, target):
         classification, regression, anchors = output
@@ -32,9 +32,9 @@ if __name__ == "__main__":
 
     model = UserModel()
     ds = UserDataset('data/icdar-task1-train')
-    loader = DataLoader(ds, collate_fn=ds.collate, batch_size=2)
+    loader = DataLoader(ds, collate_fn=ds.collate, batch_size=1)
     batch = next(iter(loader))
     data, target = batch
     out = model(data)
-    print(out)
-    print(model.metrics(out, target))
+    print(model.loss(out, target))
+    # print(model.metrics(out, target))

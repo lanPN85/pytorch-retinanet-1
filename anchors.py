@@ -10,9 +10,9 @@ class Anchors(nn.Module):
         if pyramid_levels is None:
             pyramid_levels = [3, 4, 5, 6, 7]
         if strides is None:
-            strides = [2 ** x for x in self.pyramid_levels]
+            strides = [2 ** x for x in pyramid_levels]
         if sizes is None:
-            sizes = [2 ** (x + 2) for x in self.pyramid_levels]
+            sizes = [2 ** (x + 2) for x in pyramid_levels]
         if ratios is None:
             ratios = np.array([0.5, 1, 2])
         if scales is None:
@@ -24,8 +24,11 @@ class Anchors(nn.Module):
         self.sizes = sizes
         self.scales = scales
 
+    @property
+    def count(self):
+        return len(self.scales) * len(self.ratios)
+
     def forward(self, image):
-        
         image_shape = image.shape[2:]
         image_shape = np.array(image_shape)
         image_shapes = [(image_shape + 2 ** x - 1) // (2 ** x) for x in self.pyramid_levels]

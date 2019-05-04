@@ -216,7 +216,8 @@ class ClassificationModel(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, num_classes, block, layers):
+    def __init__(self, num_classes, block, layers,
+        anchors=None):
         self.inplanes = 64
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -235,10 +236,12 @@ class ResNet(nn.Module):
 
         self.fpn = PyramidFeatures(fpn_sizes[0], fpn_sizes[1], fpn_sizes[2])
 
-        self.regressionModel = RegressionModel(256)
-        self.classificationModel = ClassificationModel(256, num_classes=num_classes)
+        if anchors is None:
+            anchors = Anchors
+        self.anchors = anchors
 
-        self.anchors = Anchors()
+        self.regressionModel = RegressionModel(256, num_anchors=self.anchors.count)
+        self.classificationModel = ClassificationModel(256, num_classes=num_classes, num_anchors=self.anchors.count)
 
         self.regressBoxes = BBoxTransform()
 
