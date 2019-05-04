@@ -7,7 +7,8 @@ class UserDataset(IcdarDataset):
     def __init__(self, data_path):
         return super().__init__(data_path, 
             transform=transforms.Compose([
-                Normalizer(), Augmenter(), Resizer()
+                Normalizer(), Augmenter(), 
+                Resizer(min_side=300, max_side=800)
             ])
         )
 
@@ -16,7 +17,8 @@ class UserValDataset(IcdarDataset):
     def __init__(self, data_path):
         return super().__init__(data_path, 
             transform=transforms.Compose([
-                Normalizer(), Resizer()
+                Normalizer(), 
+                Resizer(min_side=300, max_side=800)
             ])
         )
 
