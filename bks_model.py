@@ -1,10 +1,10 @@
 import numpy as np
 
 import csv_eval
+import anchors
 
 from model import ResNet, BasicBlock, Bottleneck
 from losses import FocalLoss
-from anchors import Anchors
 
 
 SCORE_THRES = 0.05
@@ -16,7 +16,7 @@ class UserModel(ResNet):
     def __init__(self):
         super().__init__(3, Bottleneck, [3, 4, 6, 3])
         # Custom anchor
-        self.anchors = Anchors(ratios=[0.125, 0.25, 0.5, 1, 2])
+        self.anchors = anchors.Anchors(ratios=np.array([0.125, 0.25, 0.5, 1, 2]))
 
     def loss(self, output, target):
         classification, regression, anchors = output
